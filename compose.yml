@@ -17,7 +17,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/src
       - VAPIORC_STORAGE_PATH=/app/data
-      - VAPIORC_NETWORK=vapiorc_network
+      - VAPIORC_NETWORK=vapiorc_vapiorc_network
       - VAPIORC_PORT_START=8001
       - VAPIORC_PORT_END=8100
       - VAPIORC_HOT_SPARES=2

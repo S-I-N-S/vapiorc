@@ -18,8 +18,8 @@ class Settings:
     GOLDEN_IMAGES_PATH: str = os.path.join(DATA_PATH, "golden_images")
     INSTANCES_PATH: str = os.path.join(DATA_PATH, "instances")
     
-    # Docker settings
-    DOCKER_NETWORK: str = os.getenv("VAPIORC_NETWORK", "vapiorc_default")
+    # Docker settings  
+    DOCKER_NETWORK: str = os.getenv("VAPIORC_NETWORK", "vapiorc_vapiorc_network")
     
     # Port management
     PORT_RANGE_START: int = int(os.getenv("VAPIORC_PORT_START", "8000"))

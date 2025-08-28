@@ -3,13 +3,11 @@ import socket
 import logging
 import uuid
 import shutil
-import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session
 
 from core.config import settings
-from core.db import get_db, GoldenImage, VMInstance, SessionLocal, engine
+from core.db import GoldenImage, VMInstance, SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +72,7 @@ class VMManager:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             container_id = result.stdout.strip()
             
-            logger.info(f"Started golden image container {container_name} on port {port}")
+            logger.info(f"Started golden image container {container_name} (ID: {container_id}) on port {port}")
             
             # Wait for installation completion (this is a simplified version)
             # In a real implementation, you'd monitor the installation progress
