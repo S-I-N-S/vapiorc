@@ -27,9 +27,9 @@ services:
     networks:
       - vapiorc_network
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:z   # Docker socket for VM container management
-      - vapiorc_data:/app/data:z                      # VM storage data
-      - /dev/kvm:/dev/kvm                             # KVM device passthrough for VM containers
+      - /var/run/docker.sock:/var/run/docker.sock:rw   # Docker socket for VM container management
+      - vapiorc_data:/app/data                         # VM storage data
+      - /dev/kvm:/dev/kvm                              # KVM device passthrough for VM containers
     devices:
       - /dev/net/tun:/dev/net/tun                     # TUN device for VM networking
     cap_add:

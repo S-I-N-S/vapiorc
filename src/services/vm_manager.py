@@ -140,6 +140,8 @@ class VMManager:
             )
             db.add(vm_instance)
             db.commit()
+        finally:
+            db.close()
         
         try:
             # Create instance directory
