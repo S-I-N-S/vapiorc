@@ -1,0 +1,65 @@
+---
+
+networks:
+  vapiorc_network:
+    driver: bridge
+
+services:
+  app:
+    build: ./src
+    container_name: vapiorc_app
+    restart: unless-stopped
+    working_dir: /src
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/vapiorcdb
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/src
+      - VAPIORC_STORAGE_PATH=/app/data
+      - VAPIORC_NETWORK=vapiorc_network
+      - VAPIORC_PORT_START=8001
+      - VAPIORC_PORT_END=8100
+      - VAPIORC_HOT_SPARES=2
+    depends_on:
+      - db
+      - redis
+    networks:
+      - vapiorc_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:z   # Docker socket for VM container management
+      - vapiorc_data:/app/data:z                      # VM storage data
+      - /dev/kvm:/dev/kvm                             # KVM device passthrough for VM containers
+    devices:
+      - /dev/net/tun:/dev/net/tun                     # TUN device for VM networking
+    cap_add:
+      - NET_ADMIN                                     # Network administration capabilities
+    privileged: true                                  # Required for Docker-in-Docker and KVM access
+
+  db:
+    image: postgres:15-alpine
+    container_name: vapiorc_db
+    restart: unless-stopped
+    networks:
+      - vapiorc_network
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres # Change me!
+      - POSTGRES_DB=vapiorcdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:z
+
+  redis:
+    image: redis:7-alpine
+    container_name: vapiorc_redis
+    restart: unless-stopped
+    networks:
+      - vapiorc_network
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  vapiorc_data:
