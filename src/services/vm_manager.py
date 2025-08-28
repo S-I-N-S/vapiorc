@@ -3,6 +3,7 @@ import socket
 import logging
 import uuid
 import shutil
+import asyncio
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -21,8 +22,22 @@ class VMManager:
         """Find an available port in the configured range"""
         for port in range(settings.PORT_RANGE_START, settings.PORT_RANGE_END):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                if s.connect_ex(('localhost', port)) != 0:
-                    return port
+                s.settimeout(1)
+                if s.connect_ex(('0.0.0.0', port)) != 0:
+                    # Double-check by trying to bind to the port
+                    try:
+                        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        test_socket.bind(('', port))
+                        test_socket.close()
+                        logger.debug(f"Found available port: {port}")
+                        return port
+                    except OSError:
+                        logger.debug(f"Port {port} is busy")
+                        continue
+                else:
+                    logger.debug(f"Port {port} is in use")
+        logger.warning(f"No available ports found in range {settings.PORT_RANGE_START}-{settings.PORT_RANGE_END}")
         return None
     
     async def create_golden_image(self, vm_type: str = "11") -> str:
@@ -100,24 +115,42 @@ class VMManager:
                 if not golden_image:
                     raise Exception(f"Golden image {golden_id} not found")
                 
+                # First, shutdown the golden image container
+                container_name = f"vapiorc_golden_{golden_id}"
+                logger.info(f"Shutting down golden image container {container_name}")
+                try:
+                    subprocess.run(["docker", "stop", container_name], check=True, capture_output=True)
+                    subprocess.run(["docker", "rm", container_name], check=True, capture_output=True)
+                    logger.info(f"Successfully shut down and removed container {container_name}")
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f"Error shutting down container {container_name}: {e}")
+                
                 # Copy golden image to template for fast cloning
                 golden_path = Path(settings.GOLDEN_IMAGES_PATH) / golden_id
                 template_path = Path(settings.GOLDEN_IMAGES_PATH) / f"{golden_image.vm_type}_template"
                 
+                if not golden_path.exists():
+                    raise Exception(f"Golden image path {golden_path} does not exist")
+                
                 if template_path.exists():
                     shutil.rmtree(template_path)
                 
+                logger.info(f"Copying golden image from {golden_path} to {template_path}")
                 shutil.copytree(golden_path, template_path)
                 
                 golden_image.status = "ready"
                 db.commit()
                 
-                logger.info(f"Golden image {golden_id} marked as ready")
+                logger.info(f"Golden image {golden_id} marked as ready and template created")
             finally:
                 db.close()
                 
-                # Start hot spare replenishment
+            # Only create hot spares if configured count > 0
+            if settings.HOT_SPARE_COUNT > 0:
+                logger.info(f"Creating {settings.HOT_SPARE_COUNT} hot spares")
                 await self.ensure_hot_spares()
+            else:
+                logger.info("Hot spare count is 0, skipping hot spare creation")
                 
         except Exception as e:
             logger.error(f"Error marking golden image ready: {e}")
@@ -300,12 +333,17 @@ class VMManager:
             ).count()
             
             needed = settings.HOT_SPARE_COUNT - current_count
+            logger.info(f"Current hot spares: {current_count}, needed: {needed}")
             
-            for _ in range(needed):
+            for i in range(needed):
                 try:
+                    logger.info(f"Creating hot spare {i + 1} of {needed}")
                     await self.create_vm_instance(is_hot_spare=True)
+                    # Add delay between hot spare creation to prevent port conflicts
+                    if i < needed - 1:  # Don't wait after the last one
+                        await asyncio.sleep(2)
                 except Exception as e:
-                    logger.error(f"Error creating hot spare: {e}")
+                    logger.error(f"Error creating hot spare {i + 1}: {e}")
                     break
         finally:
             db.close()
