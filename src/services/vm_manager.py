@@ -67,8 +67,10 @@ class VMManager:
             if not port:
                 raise Exception("No available ports")
             
-            # Start golden image container
+            # Start golden image container with OEM folder for post-install automation
             container_name = f"vapiorc_golden_{golden_id}"
+            assets_path = Path(settings.BASE_DIR) / "assets"  # Path to our install.bat and assets
+            
             cmd = [
                 "docker", "run", "-d",
                 "--name", container_name,
@@ -77,6 +79,7 @@ class VMManager:
                 "-e", f"VERSION={vm_type}",
                 "-e", "DISK_FMT=qcow2",
                 "-v", f"{golden_path}:/storage",
+                "-v", f"{assets_path}:/oem",  # Mount assets folder as OEM for auto-install
                 "--device=/dev/kvm",
                 "--device=/dev/net/tun",
                 "--cap-add", "NET_ADMIN",
@@ -89,8 +92,10 @@ class VMManager:
             
             logger.info(f"Started golden image container {container_name} (ID: {container_id}) on port {port}")
             
-            # Wait for installation completion (this is a simplified version)
-            # In a real implementation, you'd monitor the installation progress
+            # Wait for container to start and get MAC address for tracking
+            await self._wait_and_track_mac(container_id, golden_path)
+            
+            # Container will now automatically report when ready via webhook
             
             return golden_id
             
@@ -197,8 +202,10 @@ class VMManager:
             if not port:
                 raise Exception("No available ports")
             
-            # Start VM container
+            # Start VM container with OEM folder for readiness reporting
             container_name = f"vapiorc_vm_{instance_id}"
+            assets_path = Path(settings.BASE_DIR) / "assets"  # Path to our install.bat and assets
+            
             cmd = [
                 "docker", "run", "-d",
                 "--name", container_name,
@@ -208,6 +215,7 @@ class VMManager:
                 "-e", f"VERSION={vm_type}",
                 "-e", "DISK_FMT=qcow2",
                 "-v", f"{instance_path}:/storage",
+                "-v", f"{assets_path}:/oem",  # Mount assets folder as OEM for readiness reporting
                 "--device=/dev/kvm",
                 "--device=/dev/net/tun",
                 "--cap-add", "NET_ADMIN",
@@ -225,12 +233,16 @@ class VMManager:
                 if vm_instance:
                     vm_instance.container_id = container_id
                     vm_instance.port = port
-                    vm_instance.status = "ready"
+                    vm_instance.status = "starting"  # Will be updated to "ready" via webhook
                     db.commit()
             finally:
                 db.close()
             
             logger.info(f"Started VM instance {instance_id} on port {port}")
+            
+            # Wait for container to start and get MAC address for tracking
+            await self._wait_and_track_mac(container_id, instance_path)
+            
             return instance_id
             
         except Exception as e:
@@ -324,6 +336,47 @@ class VMManager:
     
     async def ensure_hot_spares(self):
         """Ensure we have the configured number of hot spares"""
+        # Skip if hot spares are disabled
+        if settings.HOT_SPARE_COUNT <= 0:
+            logger.info("Hot spare count is 0, skipping hot spare creation")
+            return
+        
+        # First check if we have a valid golden image template
+        template_path = Path(settings.GOLDEN_IMAGES_PATH) / "11_template"
+        if not template_path.exists() or not any(template_path.iterdir()):
+            logger.info("No valid golden image template found, checking for golden images to create template")
+            
+            # Check if there's a ready golden image we can use
+            db = SessionLocal()
+            try:
+                ready_golden = db.query(GoldenImage).filter(
+                    GoldenImage.vm_type == "11",
+                    GoldenImage.status == "ready"
+                ).first()
+                
+                if ready_golden:
+                    logger.info(f"Found ready golden image {ready_golden.id}, creating template")
+                    await self.mark_golden_image_ready(ready_golden.id)
+                    return
+                
+                # No golden image available, check if one is being created
+                creating_golden = db.query(GoldenImage).filter(
+                    GoldenImage.vm_type == "11",
+                    GoldenImage.status == "creating"
+                ).first()
+                
+                if creating_golden:
+                    logger.info(f"Golden image {creating_golden.id} is already being created, waiting for completion")
+                    return
+                
+                # No golden image exists, create one
+                logger.info("No golden image template or ready golden image found, starting golden image creation")
+                await self.create_golden_image("11")
+                return
+                
+            finally:
+                db.close()
+        
         db = SessionLocal()
         try:
             current_count = db.query(VMInstance).filter(
@@ -368,3 +421,36 @@ class VMManager:
             ]
         finally:
             db.close()
+    
+    async def _wait_and_track_mac(self, container_id: str, storage_path: Path, max_wait: int = 60):
+        """Wait for container to start and create MAC address tracking file"""
+        logger.info(f"Waiting for container {container_id} to start and tracking MAC address...")
+        
+        for _ in range(max_wait):
+            try:
+                # Try to get MAC address from container
+                cmd = [
+                    "docker", "exec", container_id,
+                    "cat", "/sys/class/net/eth0/address"
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                
+                if result.returncode == 0:
+                    mac_address = result.stdout.strip().upper()
+                    logger.info(f"Got MAC address {mac_address} for container {container_id}")
+                    
+                    # Create .mac file in storage path
+                    mac_file = storage_path / f"{container_id}.mac"
+                    with open(mac_file, 'w') as f:
+                        f.write(mac_address)
+                    
+                    logger.info(f"Created MAC tracking file {mac_file}")
+                    return mac_address
+                    
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                # Container not ready yet, wait a bit
+                await asyncio.sleep(1)
+                continue
+                
+        logger.warning(f"Could not get MAC address for container {container_id} after {max_wait} seconds")
+        return None

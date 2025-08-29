@@ -8,6 +8,9 @@ class Settings:
     PROJECT_NAME: str = "vapiorc - VM Orchestrator"
     VERSION: str = "0.1.0"
     
+    # Base directory (where vapiorc is installed)
+    BASE_DIR: str = str(Path(__file__).resolve().parent.parent)
+    
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/vapiorcdb")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")

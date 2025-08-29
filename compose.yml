@@ -20,7 +20,7 @@ services:
       - VAPIORC_NETWORK=vapiorc_vapiorc_network
       - VAPIORC_PORT_START=8001
       - VAPIORC_PORT_END=8100
-      - VAPIORC_HOT_SPARES=2
+      - VAPIORC_HOT_SPARES=1
     depends_on:
       - db
       - redis

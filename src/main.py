@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import asyncio
 
-from api import health, vms
+from api import health, vms, webhook
 from core.db import init_db
 from core.config import settings
 from services.vm_manager import VMManager
@@ -48,6 +48,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(vms.router, prefix="/api/vms", tags=["vms"])
+app.include_router(webhook.router, prefix="/webhook", tags=["webhook"])
 
 @app.get("/", summary="API Root")
 def root():
@@ -61,6 +62,7 @@ def root():
             "vms": "/api/vms",
             "golden_images": "/api/vms/golden-images",
             "assign_vm": "/api/vms/assign",
-            "instances": "/api/vms/instances"
+            "instances": "/api/vms/instances",
+            "webhook": "/webhook"
         }
     }
