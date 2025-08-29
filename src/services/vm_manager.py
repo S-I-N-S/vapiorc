@@ -17,6 +17,7 @@ class VMManager:
     
     def __init__(self):
         settings.ensure_directories()
+        self._hot_spare_lock = asyncio.Lock()
     
     def find_available_port(self) -> Optional[int]:
         """Find an available port in the configured range"""
@@ -150,12 +151,8 @@ class VMManager:
             finally:
                 db.close()
                 
-            # Only create hot spares if configured count > 0
-            if settings.HOT_SPARE_COUNT > 0:
-                logger.info(f"Creating {settings.HOT_SPARE_COUNT} hot spares")
-                await self.ensure_hot_spares()
-            else:
-                logger.info("Hot spare count is 0, skipping hot spare creation")
+            # Template is now ready - hot spares will be created by the calling ensure_hot_spares method
+            logger.info("Golden image template creation completed")
                 
         except Exception as e:
             logger.error(f"Error marking golden image ready: {e}")
@@ -341,9 +338,21 @@ class VMManager:
             logger.info("Hot spare count is 0, skipping hot spare creation")
             return
         
+        # Use lock to prevent concurrent calls
+        async with self._hot_spare_lock:
+            logger.info("Acquired hot spare management lock")
+            await self._ensure_hot_spares_internal()
+    
+    async def _ensure_hot_spares_internal(self):
+        """Internal method to ensure hot spares (called within lock)"""
         # First check if we have a valid golden image template
         template_path = Path(settings.GOLDEN_IMAGES_PATH) / "11_template"
-        if not template_path.exists() or not any(template_path.iterdir()):
+        template_exists = template_path.exists()
+        template_has_files = template_exists and any(template_path.iterdir()) if template_exists else False
+        
+        logger.info(f"Template path: {template_path}, exists: {template_exists}, has files: {template_has_files}")
+        
+        if not template_exists or not template_has_files:
             logger.info("No valid golden image template found, checking for golden images to create template")
             
             # Check if there's a ready golden image we can use
@@ -357,7 +366,16 @@ class VMManager:
                 if ready_golden:
                     logger.info(f"Found ready golden image {ready_golden.id}, creating template")
                     await self.mark_golden_image_ready(ready_golden.id)
-                    return
+                    
+                    # After creating template, re-check if it exists before proceeding
+                    template_exists = template_path.exists()
+                    template_has_files = template_exists and any(template_path.iterdir()) if template_exists else False
+                    logger.info(f"After template creation - exists: {template_exists}, has files: {template_has_files}")
+                    
+                    # If template still doesn't exist, something went wrong - don't create hot spares
+                    if not template_exists or not template_has_files:
+                        logger.error("Template creation failed or incomplete, cannot create hot spares")
+                        return
                 
                 # No golden image available, check if one is being created
                 creating_golden = db.query(GoldenImage).filter(
