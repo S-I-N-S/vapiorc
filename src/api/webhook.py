@@ -55,10 +55,12 @@ async def container_ready_webhook(
         logger.info(f"Processing golden image completion for {container_info['id']}")
         try:
             await vm_manager.mark_golden_image_ready(container_info["id"])
+            # Automatically create hot spares now that template is ready
+            await vm_manager.ensure_hot_spares()
             return {
                 "status": "processed",
                 "type": "golden_image",
-                "message": f"Golden image {container_info['id']} marked as ready"
+                "message": f"Golden image {container_info['id']} marked as ready and hot spares initiated"
             }
         except Exception as e:
             logger.error(f"Error processing golden image webhook: {e}")

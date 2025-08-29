@@ -5,6 +5,9 @@ REM and sets up readiness reporting for both golden images and VM instances
 
 echo Starting Vapiorc post-install configuration...
 
+REM Copy this script to Desktop for troubleshooting (do this first in case of crashes)
+copy "%~f0" "C:\Users\Docker\Desktop\install_debug.bat"
+
 REM Check Windows version and set Python path
 for /f "tokens=4-5 delims=. " %%i in ('ver') do set VERSION=%%i.%%j
 echo Detected Windows version: %VERSION%
@@ -130,3 +133,4 @@ start /b powershell -Command "& '%pythonPath%' '%scriptPath%'"
 
 echo Vapiorc post-install configuration completed.
 echo The system will automatically report readiness to the vapiorc API.
+echo Install script copied to Desktop as install_debug.bat for troubleshooting.

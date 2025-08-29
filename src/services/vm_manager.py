@@ -121,7 +121,28 @@ class VMManager:
                 if not golden_image:
                     raise Exception(f"Golden image {golden_id} not found")
                 
-                # First, shutdown the golden image container
+                # Copy golden image to template BEFORE shutting down container
+                golden_path = Path(settings.GOLDEN_IMAGES_PATH) / golden_id
+                template_path = Path(settings.GOLDEN_IMAGES_PATH) / f"{golden_image.vm_type}_template"
+                
+                if not golden_path.exists():
+                    raise Exception(f"Golden image path {golden_path} does not exist")
+                
+                # Remove existing template if it exists
+                if template_path.exists():
+                    logger.info(f"Removing existing template at {template_path}")
+                    shutil.rmtree(template_path)
+                
+                logger.info(f"Copying golden image from {golden_path} to {template_path}")
+                shutil.copytree(golden_path, template_path)
+                
+                # Remove .mac files from template to allow random MAC assignment
+                logger.info("Removing MAC address files from template")
+                for mac_file in template_path.glob("*.mac"):
+                    mac_file.unlink()
+                    logger.info(f"Removed MAC file: {mac_file}")
+                
+                # Now shutdown and remove the golden image container
                 container_name = f"vapiorc_golden_{golden_id}"
                 logger.info(f"Shutting down golden image container {container_name}")
                 try:
@@ -131,23 +152,15 @@ class VMManager:
                 except subprocess.CalledProcessError as e:
                     logger.warning(f"Error shutting down container {container_name}: {e}")
                 
-                # Copy golden image to template for fast cloning
-                golden_path = Path(settings.GOLDEN_IMAGES_PATH) / golden_id
-                template_path = Path(settings.GOLDEN_IMAGES_PATH) / f"{golden_image.vm_type}_template"
-                
-                if not golden_path.exists():
-                    raise Exception(f"Golden image path {golden_path} does not exist")
-                
-                if template_path.exists():
-                    shutil.rmtree(template_path)
-                
-                logger.info(f"Copying golden image from {golden_path} to {template_path}")
-                shutil.copytree(golden_path, template_path)
+                # Remove the original golden image files to save space
+                if golden_path.exists():
+                    logger.info(f"Removing original golden image files at {golden_path}")
+                    shutil.rmtree(golden_path)
                 
                 golden_image.status = "ready"
                 db.commit()
                 
-                logger.info(f"Golden image {golden_id} marked as ready and template created")
+                logger.info(f"Golden image {golden_id} marked as ready, template created, and original files cleaned up")
             finally:
                 db.close()
                 
@@ -320,13 +333,17 @@ class VMManager:
         try:
             # Stop and remove container
             container_name = f"vapiorc_vm_{instance_id}"
+            logger.info(f"Stopping container {container_name}")
             subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
             subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
+            logger.info(f"Container {container_name} stopped and removed")
             
-            # Remove instance directory
+            # Remove instance directory and all files (for security)
             instance_path = Path(settings.INSTANCES_PATH) / instance_id
             if instance_path.exists():
+                logger.info(f"Removing VM instance files at {instance_path}")
                 shutil.rmtree(instance_path)
+                logger.info(f"VM instance {instance_id} files completely removed for security")
                 
         except Exception as e:
             logger.error(f"Error cleaning up VM instance {instance_id}: {e}")
