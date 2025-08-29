@@ -23,6 +23,9 @@ async def lifespan(app: FastAPI):
     # Ensure directories exist
     settings.ensure_directories()
     
+    # Ensure install script is configured with correct host IP
+    settings.ensure_install_script_configured()
+    
     # Start hot spare management in background
     asyncio.create_task(vm_manager.ensure_hot_spares())
     

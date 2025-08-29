@@ -51,7 +51,7 @@ echo logging.basicConfig^(level=logging.INFO^)
 echo logger = logging.getLogger^(__name__^)
 echo.
 echo # Configuration
-echo WEBHOOK_HOST = "host.docker.internal"  # Docker host from container perspective
+echo WEBHOOK_HOST = "{{VAPIORC_HOST_IP}}"  # Will be replaced with actual host IP
 echo WEBHOOK_PORT = "8000"  # Default vapiorc API port
 echo VM_TYPE = "11"  # Default to Windows 11
 echo MAX_RETRIES = 30

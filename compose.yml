@@ -21,6 +21,7 @@ services:
       - VAPIORC_PORT_START=8001
       - VAPIORC_PORT_END=8100
       - VAPIORC_HOT_SPARES=1
+      - VAPIORC_HOST_IP=192.168.2.21
     depends_on:
       db:
         condition: service_healthy

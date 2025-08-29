@@ -34,10 +34,42 @@ class Settings:
     # VM Configuration
     VM_TYPE: str = "11"  # Fixed to Windows 11
     
+    # Host networking
+    HOST_IP: str = os.getenv("VAPIORC_HOST_IP", "192.168.1.100")
+    
     @classmethod
     def ensure_directories(cls):
         """Ensure all required directories exist"""
         for path in [cls.DATA_PATH, cls.GOLDEN_IMAGES_PATH, cls.INSTANCES_PATH]:
             Path(path).mkdir(parents=True, exist_ok=True)
+    
+    @classmethod
+    def ensure_install_script_configured(cls):
+        """Ensure install.bat has the correct host IP configured"""
+        install_bat_path = Path(cls.BASE_DIR) / "assets" / "install.bat"
+        
+        if not install_bat_path.exists():
+            return
+        
+        # Read the current content
+        content = install_bat_path.read_text(encoding='utf-8')
+        
+        # Check if the content needs updating
+        placeholder = "{{VAPIORC_HOST_IP}}"
+        if placeholder in content:
+            # Replace the placeholder with the actual host IP
+            updated_content = content.replace(placeholder, cls.HOST_IP)
+            
+            # Write the updated content back
+            install_bat_path.write_text(updated_content, encoding='utf-8')
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Updated install.bat with host IP: {cls.HOST_IP}")
+        elif cls.HOST_IP not in content:
+            # Log a warning if the host IP isn't found and placeholder isn't there either
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"install.bat may not be configured with correct host IP. Expected: {cls.HOST_IP}")
 
 settings = Settings()
