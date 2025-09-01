@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
     settings.ensure_directories()
     
     # Ensure install script is configured with correct host IP
+    logger.info(f"Configuring install.bat with host IP: {settings.HOST_IP}")
     settings.ensure_install_script_configured()
     
     # Start hot spare management in background

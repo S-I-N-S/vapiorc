@@ -68,7 +68,7 @@ echo         result = subprocess.run^(['getmac', '/fo', 'csv', '/nh'], capture_o
 echo         if result.returncode == 0:
 echo             # Parse the first MAC address from CSV output
 echo             mac_line = result.stdout.strip^(^).split^('\n'^)[0]
-echo             mac = mac_line.split^(','^)[0].strip^('"'^).replace^('-', ':'^^^)
+echo             mac = mac_line.split^(','^)[0].strip^('"'^).replace^('-', '^:'^)
 echo             logger.info^(f"Detected MAC address: {mac}"^)
 echo             return mac
 echo     except Exception as e:
