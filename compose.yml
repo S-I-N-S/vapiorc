@@ -16,8 +16,9 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/vapiorcdb
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/src
-      - VAPIORC_STORAGE_PATH=/app/data
-      - VAPIORC_BASE_DIR=/home/cayub/code/vapiorc
+      - VAPIORC_HOST_BASE_DIR=/home/cayub/code/vapiorc
+      - VAPIORC_HOST_DATA_DIR=/home/cayub/code/vapiorc/app_data
+      - VAPIORC_CONTAINER_DATA_DIR=/app/data
       - VAPIORC_NETWORK=vapiorc_vapiorc_network
       - VAPIORC_PORT_START=8001
       - VAPIORC_PORT_END=8100
@@ -32,7 +33,7 @@ services:
       - vapiorc_network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:rw   # Docker socket for VM container management
-      - ./app_data:/app/data                         # VM storage data
+      - ./app_data:/app/data                           # VM storage data
       - /dev/kvm:/dev/kvm                              # KVM device passthrough for VM containers
     devices:
       - /dev/net/tun:/dev/net/tun                     # TUN device for VM networking
