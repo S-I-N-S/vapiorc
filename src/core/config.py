@@ -8,18 +8,25 @@ class Settings:
     PROJECT_NAME: str = "vapiorc - VM Orchestrator"
     VERSION: str = "0.1.0"
     
-    # Base directory (where vapiorc is installed)
-    BASE_DIR: str = str(Path(__file__).resolve().parent.parent)
+    # Base directory (where vapiorc is installed) - use host path from environment
+    BASE_DIR: str = os.getenv("VAPIORC_BASE_DIR", str(Path(__file__).resolve().parent.parent))
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/vapiorcdb")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
     
-    # Storage paths
+    # Storage paths (container internal paths)
     STORAGE_PATH: str = os.getenv("VAPIORC_STORAGE_PATH", "/tmp/vapiorc")
     DATA_PATH: str = os.path.join(STORAGE_PATH, "data")
     GOLDEN_IMAGES_PATH: str = os.path.join(DATA_PATH, "golden_images")
     INSTANCES_PATH: str = os.path.join(DATA_PATH, "instances")
+    
+    # Host storage paths (for Docker volume mounting)
+    HOST_STORAGE_PATH: str = os.getenv("VAPIORC_HOST_STORAGE_PATH", os.path.join(BASE_DIR, "app_data"))
+    HOST_DATA_PATH: str = os.path.join(HOST_STORAGE_PATH, "data")
+    HOST_GOLDEN_IMAGES_PATH: str = os.path.join(HOST_DATA_PATH, "golden_images")
+    HOST_INSTANCES_PATH: str = os.path.join(HOST_DATA_PATH, "instances")
+    HOST_ASSETS_PATH: str = os.path.join(BASE_DIR, "assets")
     
     # Docker settings  
     DOCKER_NETWORK: str = os.getenv("VAPIORC_NETWORK", "vapiorc_vapiorc_network")

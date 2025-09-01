@@ -107,3 +107,6 @@ requests.post(f"http://localhost:8000/api/vms/instances/{vm_info['instance_id']}
 ## License
 
 Open source - integrate into any project.
+
+
+Currently need to get the 'true' files paths working as we were mapping the oem and storage folders to paths inside the python container and not the actual host path. Need to test to see if we fixed those path mappings and that the install.bat works and that the copying of files works

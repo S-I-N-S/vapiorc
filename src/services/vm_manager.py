@@ -70,7 +70,9 @@ class VMManager:
             
             # Start golden image container with OEM folder for post-install automation
             container_name = f"vapiorc_golden_{golden_id}"
-            assets_path = Path(settings.BASE_DIR) / "assets"  # Path to our install.bat and assets
+            # Use host paths for Docker volume mounting
+            host_golden_path = Path(settings.HOST_GOLDEN_IMAGES_PATH) / golden_id
+            host_assets_path = settings.HOST_ASSETS_PATH
             
             cmd = [
                 "docker", "run", "-d",
@@ -79,8 +81,8 @@ class VMManager:
                 "-p", f"{port}:8006",
                 "-e", f"VERSION={vm_type}",
                 "-e", "DISK_FMT=qcow2",
-                "-v", f"{golden_path}:/storage",
-                "-v", f"{assets_path}:/oem",  # Mount assets folder as OEM for auto-install
+                "-v", f"{host_golden_path}:/storage",
+                "-v", f"{host_assets_path}:/oem",  # Mount assets folder as OEM for auto-install
                 "--device=/dev/kvm",
                 "--device=/dev/net/tun",
                 "--cap-add", "NET_ADMIN",
@@ -214,7 +216,9 @@ class VMManager:
             
             # Start VM container with OEM folder for readiness reporting
             container_name = f"vapiorc_vm_{instance_id}"
-            assets_path = Path(settings.BASE_DIR) / "assets"  # Path to our install.bat and assets
+            # Use host paths for Docker volume mounting
+            host_instance_path = Path(settings.HOST_INSTANCES_PATH) / instance_id
+            host_assets_path = settings.HOST_ASSETS_PATH
             
             cmd = [
                 "docker", "run", "-d",
@@ -224,8 +228,8 @@ class VMManager:
                 "-p", f"{port + 1000}:3389",  # RDP port
                 "-e", f"VERSION={vm_type}",
                 "-e", "DISK_FMT=qcow2",
-                "-v", f"{instance_path}:/storage",
-                "-v", f"{assets_path}:/oem",  # Mount assets folder as OEM for readiness reporting
+                "-v", f"{host_instance_path}:/storage",
+                "-v", f"{host_assets_path}:/oem",  # Mount assets folder as OEM for readiness reporting
                 "--device=/dev/kvm",
                 "--device=/dev/net/tun",
                 "--cap-add", "NET_ADMIN",
