@@ -54,25 +54,27 @@ class Settings:
         
         # Try multiple possible paths for install.bat
         possible_paths = [
-            Path(cls.HOST_ASSETS_PATH) / "install.bat",
-            Path("/src/assets") / "install.bat",  # Container internal path
-            Path(__file__).resolve().parent.parent / "assets" / "install.bat"  # Relative to this file
+            Path("/src/assets") / "install.bat",  # Container internal path (most likely)
+            Path(__file__).resolve().parent.parent / "assets" / "install.bat",  # Relative to this file
+            Path(cls.HOST_ASSETS_PATH) / "install.bat"  # Host path (less likely to work from container)
         ]
         
         install_bat_path = None
         for path in possible_paths:
+            logger.info(f"Checking for install.bat at: {path}")
             if path.exists():
                 install_bat_path = path
                 logger.info(f"Found install.bat at: {path}")
                 break
         
         if not install_bat_path:
-            logger.warning(f"Could not find install.bat in any of these locations: {[str(p) for p in possible_paths]}")
+            logger.error(f"Could not find install.bat in any of these locations: {[str(p) for p in possible_paths]}")
             return
         
         # Read the current content
         try:
             content = install_bat_path.read_text(encoding='utf-8')
+            logger.info(f"Successfully read install.bat content ({len(content)} characters)")
         except Exception as e:
             logger.error(f"Failed to read install.bat: {e}")
             return
@@ -80,32 +82,44 @@ class Settings:
         # Check if the content needs updating
         placeholder = "{{VAPIORC_HOST_IP}}"
         needs_update = False
+        updated_content = content
         
         if placeholder in content:
             logger.info(f"Found placeholder {placeholder}, replacing with {cls.HOST_IP}")
             updated_content = content.replace(placeholder, cls.HOST_IP)
             needs_update = True
-        elif cls.HOST_IP not in content:
+        else:
             # Check if there's an old IP that needs to be replaced
             # Look for the pattern WEBHOOK_HOST = "x.x.x.x"
             import re
             ip_pattern = r'WEBHOOK_HOST = "[^"]*"'
-            if re.search(ip_pattern, content):
-                logger.info(f"Found existing IP pattern, replacing with {cls.HOST_IP}")
-                updated_content = re.sub(ip_pattern, f'WEBHOOK_HOST = "{cls.HOST_IP}"', content)
-                needs_update = True
+            match = re.search(ip_pattern, content)
+            if match:
+                current_ip = match.group(0)
+                expected_line = f'WEBHOOK_HOST = "{cls.HOST_IP}"'
+                if current_ip != expected_line:
+                    logger.info(f"Found existing IP pattern '{current_ip}', replacing with '{expected_line}'")
+                    updated_content = re.sub(ip_pattern, expected_line, content)
+                    needs_update = True
+                else:
+                    logger.info(f"install.bat already contains correct IP: {cls.HOST_IP}")
+                    return
             else:
-                logger.warning(f"install.bat may not be configured with correct host IP. Expected: {cls.HOST_IP}")
+                logger.warning(f"install.bat does not contain placeholder or IP pattern. Content preview: {content[:200]}...")
                 return
-        else:
-            logger.info(f"install.bat already contains correct IP: {cls.HOST_IP}")
-            return
         
         if needs_update:
             try:
                 # Write the updated content back
                 install_bat_path.write_text(updated_content, encoding='utf-8')
                 logger.info(f"Successfully updated install.bat with host IP: {cls.HOST_IP}")
+                
+                # Verify the change was made
+                verify_content = install_bat_path.read_text(encoding='utf-8')
+                if cls.HOST_IP in verify_content and placeholder not in verify_content:
+                    logger.info("Verified that install.bat was updated correctly")
+                else:
+                    logger.error("Failed to verify install.bat update")
             except Exception as e:
                 logger.error(f"Failed to write updated install.bat: {e}")
 
