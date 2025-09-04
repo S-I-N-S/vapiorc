@@ -41,9 +41,8 @@ echo Copying readiness reporter script...
 set "reporterPath=C:\Users\Docker\Desktop\vapiorc_reporter.py"
 copy "C:\OEM\vapiorc_reporter.py" "%reporterPath%"
 
-REM Replace the host IP placeholder in the copied script
-echo Setting up host IP configuration...
-powershell -Command "(Get-Content '%reporterPath%') -replace '{{VAPIORC_HOST_IP}}', (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Get-NetIPConfiguration | Where-Object {$_.IPv4DefaultGateway} | Select-Object -First 1).IPv4Address.IPAddress | Set-Content '%reporterPath%'"
+REM Note: Host IP should already be configured in the source script by vapiorc config system
+echo Host IP already configured in vapiorc_reporter.py by the orchestrator
 
 REM Create a startup task that runs the reporter once the user logs in
 echo Creating startup task...

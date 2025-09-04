@@ -49,25 +49,35 @@ class Settings:
     
     @classmethod
     def ensure_install_script_configured(cls):
-        """Ensure install.bat has the correct host IP configured"""
+        """Ensure install.bat and vapiorc_reporter.py have the correct host IP configured"""
         import logging
         logger = logging.getLogger(__name__)
         
-        # Simple path - assets are mounted to /app/assets via docker-compose
+        # Update install.bat
         install_bat_path = Path(cls.CONTAINER_ASSETS_DIR) / "install.bat"
+        cls._update_file_ip(install_bat_path, "install.bat", logger)
         
-        logger.info(f"Checking for install.bat at: {install_bat_path}")
-        if not install_bat_path.exists():
-            logger.error(f"Could not find install.bat at {install_bat_path}")
+        # Update vapiorc_reporter.py
+        reporter_py_path = Path(cls.CONTAINER_ASSETS_DIR) / "vapiorc_reporter.py"
+        cls._update_file_ip(reporter_py_path, "vapiorc_reporter.py", logger)
+    
+    @classmethod
+    def _update_file_ip(cls, file_path: Path, file_name: str, logger):
+        """Update a single file with the correct host IP"""
+        import re
+        
+        logger.info(f"Checking for {file_name} at: {file_path}")
+        if not file_path.exists():
+            logger.error(f"Could not find {file_name} at {file_path}")
             logger.error("Make sure assets folder is properly mounted in docker-compose.yml")
             return
         
         # Read the current content
         try:
-            content = install_bat_path.read_text(encoding='utf-8')
-            logger.info(f"Successfully read install.bat content ({len(content)} characters)")
+            content = file_path.read_text(encoding='utf-8')
+            logger.info(f"Successfully read {file_name} content ({len(content)} characters)")
         except Exception as e:
-            logger.error(f"Failed to read install.bat: {e}")
+            logger.error(f"Failed to read {file_name}: {e}")
             return
         
         # Check if the content needs updating
@@ -76,42 +86,41 @@ class Settings:
         updated_content = content
         
         if placeholder in content:
-            logger.info(f"Found placeholder {placeholder}, replacing with {cls.HOST_IP}")
+            logger.info(f"Found placeholder {placeholder} in {file_name}, replacing with {cls.HOST_IP}")
             updated_content = content.replace(placeholder, cls.HOST_IP)
             needs_update = True
         else:
             # Check if there's an old IP that needs to be replaced
             # Look for the pattern WEBHOOK_HOST = "x.x.x.x"
-            import re
             ip_pattern = r'WEBHOOK_HOST = "[^"]*"'
             match = re.search(ip_pattern, content)
             if match:
                 current_ip = match.group(0)
                 expected_line = f'WEBHOOK_HOST = "{cls.HOST_IP}"'
                 if current_ip != expected_line:
-                    logger.info(f"Found existing IP pattern '{current_ip}', replacing with '{expected_line}'")
+                    logger.info(f"Found existing IP pattern '{current_ip}' in {file_name}, replacing with '{expected_line}'")
                     updated_content = re.sub(ip_pattern, expected_line, content)
                     needs_update = True
                 else:
-                    logger.info(f"install.bat already contains correct IP: {cls.HOST_IP}")
+                    logger.info(f"{file_name} already contains correct IP: {cls.HOST_IP}")
                     return
             else:
-                logger.warning(f"install.bat does not contain placeholder or IP pattern. Content preview: {content[:200]}...")
+                logger.warning(f"{file_name} does not contain placeholder or IP pattern. Content preview: {content[:200]}...")
                 return
         
         if needs_update:
             try:
                 # Write the updated content back
-                install_bat_path.write_text(updated_content, encoding='utf-8')
-                logger.info(f"Successfully updated install.bat with host IP: {cls.HOST_IP}")
+                file_path.write_text(updated_content, encoding='utf-8')
+                logger.info(f"Successfully updated {file_name} with host IP: {cls.HOST_IP}")
                 
                 # Verify the change was made
-                verify_content = install_bat_path.read_text(encoding='utf-8')
+                verify_content = file_path.read_text(encoding='utf-8')
                 if cls.HOST_IP in verify_content and placeholder not in verify_content:
-                    logger.info("Verified that install.bat was updated correctly")
+                    logger.info(f"Verified that {file_name} was updated correctly")
                 else:
-                    logger.error("Failed to verify install.bat update")
+                    logger.error(f"Failed to verify {file_name} update")
             except Exception as e:
-                logger.error(f"Failed to write updated install.bat: {e}")
+                logger.error(f"Failed to write updated {file_name}: {e}")
 
 settings = Settings()
