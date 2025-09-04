@@ -95,8 +95,8 @@ class VMManager:
             
             logger.info(f"Started golden image container {container_name} (ID: {container_id}) on port {port}")
             
-            # Wait for container to start and get MAC address for tracking
-            await self._wait_and_track_mac(container_id, golden_path)
+            # Wait for container to start - qemu/kvm will create .mac files automatically
+            await self._wait_for_container_ready(container_id)
             
             # Container will now automatically report when ready via webhook
             
@@ -123,12 +123,28 @@ class VMManager:
                 if not golden_image:
                     raise Exception(f"Golden image {golden_id} not found")
                 
-                # Copy golden image to template BEFORE shutting down container
                 golden_path = Path(settings.GOLDEN_IMAGES_PATH) / golden_id
-                template_path = Path(settings.GOLDEN_IMAGES_PATH) / f"{golden_image.vm_type}_template"
-                
                 if not golden_path.exists():
                     raise Exception(f"Golden image path {golden_path} does not exist")
+                
+                # First shutdown the golden image container
+                container_name = f"vapiorc_golden_{golden_id}"
+                logger.info(f"Shutting down golden image container {container_name} before template creation")
+                try:
+                    subprocess.run(["docker", "stop", container_name], check=True, capture_output=True)
+                    subprocess.run(["docker", "rm", container_name], check=True, capture_output=True)
+                    logger.info(f"Successfully shut down and removed container {container_name}")
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f"Error shutting down container {container_name}: {e}")
+                
+                # Remove .mac files from golden image before copying
+                logger.info("Removing MAC address files from golden image before template creation")
+                for mac_file in golden_path.glob("*.mac"):
+                    mac_file.unlink()
+                    logger.info(f"Removed MAC file: {mac_file}")
+                
+                # Now copy to template
+                template_path = Path(settings.GOLDEN_IMAGES_PATH) / f"{golden_image.vm_type}_template"
                 
                 # Remove existing template if it exists
                 if template_path.exists():
@@ -137,22 +153,6 @@ class VMManager:
                 
                 logger.info(f"Copying golden image from {golden_path} to {template_path}")
                 shutil.copytree(golden_path, template_path)
-                
-                # Remove .mac files from template to allow random MAC assignment
-                logger.info("Removing MAC address files from template")
-                for mac_file in template_path.glob("*.mac"):
-                    mac_file.unlink()
-                    logger.info(f"Removed MAC file: {mac_file}")
-                
-                # Now shutdown and remove the golden image container
-                container_name = f"vapiorc_golden_{golden_id}"
-                logger.info(f"Shutting down golden image container {container_name}")
-                try:
-                    subprocess.run(["docker", "stop", container_name], check=True, capture_output=True)
-                    subprocess.run(["docker", "rm", container_name], check=True, capture_output=True)
-                    logger.info(f"Successfully shut down and removed container {container_name}")
-                except subprocess.CalledProcessError as e:
-                    logger.warning(f"Error shutting down container {container_name}: {e}")
                 
                 # Remove the original golden image files to save space
                 if golden_path.exists():
@@ -254,8 +254,8 @@ class VMManager:
             
             logger.info(f"Started VM instance {instance_id} on port {port}")
             
-            # Wait for container to start and get MAC address for tracking
-            await self._wait_and_track_mac(container_id, instance_path)
+            # Wait for container to start - qemu/kvm will create .mac files automatically
+            await self._wait_for_container_ready(container_id)
             
             return instance_id
             
@@ -461,35 +461,24 @@ class VMManager:
         finally:
             db.close()
     
-    async def _wait_and_track_mac(self, container_id: str, storage_path: Path, max_wait: int = 60):
-        """Wait for container to start and create MAC address tracking file"""
-        logger.info(f"Waiting for container {container_id} to start and tracking MAC address...")
+    async def _wait_for_container_ready(self, container_id: str, max_wait: int = 60):
+        """Wait for container to start - qemu/kvm will automatically create .mac files"""
+        logger.info(f"Waiting for container {container_id} to start...")
         
         for _ in range(max_wait):
             try:
-                # Try to get MAC address from container
-                cmd = [
-                    "docker", "exec", container_id,
-                    "cat", "/sys/class/net/eth0/address"
-                ]
+                # Check if container is running and responsive
+                cmd = ["docker", "exec", container_id, "echo", "ready"]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
                 
                 if result.returncode == 0:
-                    mac_address = result.stdout.strip().upper()
-                    logger.info(f"Got MAC address {mac_address} for container {container_id}")
-                    
-                    # Create .mac file in storage path
-                    mac_file = storage_path / f"{container_id}.mac"
-                    with open(mac_file, 'w') as f:
-                        f.write(mac_address)
-                    
-                    logger.info(f"Created MAC tracking file {mac_file}")
-                    return mac_address
+                    logger.info(f"Container {container_id} is ready - qemu/kvm will create .mac file automatically")
+                    return True
                     
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 # Container not ready yet, wait a bit
                 await asyncio.sleep(1)
                 continue
                 
-        logger.warning(f"Could not get MAC address for container {container_id} after {max_wait} seconds")
-        return None
+        logger.warning(f"Container {container_id} not ready after {max_wait} seconds")
+        return False

@@ -151,7 +151,7 @@ async def container_status_check(
 
 async def find_container_by_mac(vm_type: str, mac_address: str) -> Optional[dict]:
     """
-    Find container information by MAC address
+    Find container information by MAC address using auto-generated .mac files from qemu/kvm
     
     Args:
         vm_type: The VM type to search in
@@ -161,23 +161,27 @@ async def find_container_by_mac(vm_type: str, mac_address: str) -> Optional[dict
         Optional[dict]: Container info with id and type, or None if not found
     """
     try:
-        mac_address = mac_address.strip().upper()
+        mac_address = mac_address.strip().upper().replace('-', ':')
         
         # Check golden images first
         golden_path = Path(settings.GOLDEN_IMAGES_PATH)
         for golden_dir in golden_path.glob("*"):
-            if not golden_dir.is_dir():
+            if not golden_dir.is_dir() or golden_dir.name.endswith("_template"):
                 continue
                 
             for mac_file in golden_dir.glob("*.mac"):
                 if mac_file.exists():
-                    with open(mac_file, "r") as f:
-                        stored_mac = f.readline().strip().upper()
-                    
-                    if stored_mac == mac_address:
-                        golden_id = golden_dir.name
-                        logger.info(f"Found golden image {golden_id} for MAC {mac_address}")
-                        return {"id": golden_id, "type": "golden_image"}
+                    try:
+                        with open(mac_file, "r") as f:
+                            stored_mac = f.read().strip().upper().replace('-', ':')
+                        
+                        if stored_mac == mac_address:
+                            golden_id = golden_dir.name
+                            logger.info(f"Found golden image {golden_id} for MAC {mac_address}")
+                            return {"id": golden_id, "type": "golden_image"}
+                    except Exception as e:
+                        logger.warning(f"Error reading MAC file {mac_file}: {e}")
+                        continue
         
         # Check VM instances
         instances_path = Path(settings.INSTANCES_PATH)
@@ -187,13 +191,17 @@ async def find_container_by_mac(vm_type: str, mac_address: str) -> Optional[dict
                 
             for mac_file in instance_dir.glob("*.mac"):
                 if mac_file.exists():
-                    with open(mac_file, "r") as f:
-                        stored_mac = f.readline().strip().upper()
-                    
-                    if stored_mac == mac_address:
-                        instance_id = instance_dir.name
-                        logger.info(f"Found VM instance {instance_id} for MAC {mac_address}")
-                        return {"id": instance_id, "type": "vm_instance"}
+                    try:
+                        with open(mac_file, "r") as f:
+                            stored_mac = f.read().strip().upper().replace('-', ':')
+                        
+                        if stored_mac == mac_address:
+                            instance_id = instance_dir.name
+                            logger.info(f"Found VM instance {instance_id} for MAC {mac_address}")
+                            return {"id": instance_id, "type": "vm_instance"}
+                    except Exception as e:
+                        logger.warning(f"Error reading MAC file {mac_file}: {e}")
+                        continue
         
         logger.info(f"No container found for MAC {mac_address}")
         return None
