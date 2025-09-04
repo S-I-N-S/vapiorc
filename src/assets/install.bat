@@ -36,88 +36,14 @@ echo Installing Python dependencies...
 powershell -Command "& '%pythonPath%' -m ensurepip"
 powershell -Command "& '%pythonPath%' -m pip install requests psutil"
 
-REM Create the readiness reporter script
-echo Creating readiness reporter...
+REM Copy the readiness reporter script from OEM folder
+echo Copying readiness reporter script...
 set "reporterPath=C:\Users\Docker\Desktop\vapiorc_reporter.py"
+copy "C:\OEM\vapiorc_reporter.py" "%reporterPath%"
 
-(
-echo import requests
-echo import time
-echo import socket
-echo import subprocess
-echo import logging
-echo import os
-echo from pathlib import Path
-echo.
-echo # Configure logging
-echo logging.basicConfig^(level=logging.INFO^)
-echo logger = logging.getLogger^(__name__^)
-echo.
-echo # Configuration
-echo WEBHOOK_HOST = "{{VAPIORC_HOST_IP}}"
-echo WEBHOOK_PORT = "8000"
-echo VM_TYPE = "11"
-echo MAX_RETRIES = 30
-echo RETRY_DELAY = 10
-echo.
-echo def get_mac_address^(^):
-echo     """Get the MAC address of the primary network interface"""
-echo     try:
-echo         # Get MAC address using getmac command
-echo         result = subprocess.run^(['getmac', '/fo', 'csv', '/nh'], capture_output=True, text=True^)
-echo         if result.returncode == 0:
-echo             # Parse the first MAC address from CSV output
-echo             mac_line = result.stdout.strip^(^).split^('\n'^)[0]
-echo             mac = mac_line.split(',')[0].strip('\"').replace('-', ':')
-echo             logger.info^(f"Detected MAC address: {mac}"^)
-echo             return mac
-echo     except Exception as e:
-echo         logger.error^(f"Error getting MAC address: {e}"^)
-echo     return None
-echo.
-echo def report_readiness^(^):
-echo     """Report container readiness to vapiorc webhook"""
-echo     mac_address = get_mac_address^(^)
-echo     if not mac_address:
-echo         logger.error^("Could not determine MAC address"^)
-echo         return False
-echo.
-echo     webhook_url = f"http://{WEBHOOK_HOST}:{WEBHOOK_PORT}/webhook/ready/{VM_TYPE}"
-echo     headers = {"MAC-Address": mac_address}
-echo.
-echo     for attempt in range^(MAX_RETRIES^):
-echo         try:
-echo             logger.info^(f"Reporting readiness to {webhook_url} ^(attempt {attempt + 1}/{MAX_RETRIES}^)"^)
-echo             response = requests.post^(webhook_url, headers=headers, timeout=10^)
-echo             
-echo             if response.status_code == 200:
-echo                 logger.info^("Successfully reported readiness"^)
-echo                 return True
-echo             else:
-echo                 logger.warning^(f"Webhook returned status {response.status_code}: {response.text}"^)
-echo                 
-echo         except requests.exceptions.RequestException as e:
-echo             logger.warning^(f"Failed to reach webhook: {e}"^)
-echo             
-echo         if attempt + 1 != MAX_RETRIES:
-echo             logger.info^(f"Waiting {RETRY_DELAY} seconds before retry..."^)
-echo             time.sleep^(RETRY_DELAY^)
-echo     
-echo     logger.error^(f"Failed to report readiness after {MAX_RETRIES} attempts"^)
-echo     return False
-echo.
-echo if __name__ == "__main__":
-echo     logger.info^("Starting vapiorc readiness reporter"^)
-echo     
-echo     # Wait a bit for network to be fully ready
-echo     time.sleep^(30^)
-echo     
-echo     # Report readiness
-echo     if report_readiness^(^):
-echo         logger.info^("Readiness reporting completed successfully"^)
-echo     else:
-echo         logger.error^("Readiness reporting failed"^)
-) > "%reporterPath%"
+REM Replace the host IP placeholder in the copied script
+echo Setting up host IP configuration...
+powershell -Command "(Get-Content '%reporterPath%') -replace '{{VAPIORC_HOST_IP}}', (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Get-NetIPConfiguration | Where-Object {$_.IPv4DefaultGateway} | Select-Object -First 1).IPv4Address.IPAddress | Set-Content '%reporterPath%'"
 
 REM Create a startup task that runs the reporter once the user logs in
 echo Creating startup task...
