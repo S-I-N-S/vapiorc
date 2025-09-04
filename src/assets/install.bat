@@ -54,9 +54,9 @@ echo logging.basicConfig^(level=logging.INFO^)
 echo logger = logging.getLogger^(__name__^)
 echo.
 echo # Configuration
-echo WEBHOOK_HOST = "{{VAPIORC_HOST_IP}}"  # Will be replaced with actual host IP
-echo WEBHOOK_PORT = "8000"  # Default vapiorc API port
-echo VM_TYPE = "11"  # Default to Windows 11
+echo WEBHOOK_HOST = "{{VAPIORC_HOST_IP}}"
+echo WEBHOOK_PORT = "8000"
+echo VM_TYPE = "11"
 echo MAX_RETRIES = 30
 echo RETRY_DELAY = 10
 echo.
@@ -68,7 +68,7 @@ echo         result = subprocess.run^(['getmac', '/fo', 'csv', '/nh'], capture_o
 echo         if result.returncode == 0:
 echo             # Parse the first MAC address from CSV output
 echo             mac_line = result.stdout.strip^(^).split^('\n'^)[0]
-echo             mac = mac_line.split^(','^)[0].strip^('"'^).replace^('-', '^:'^)
+echo             mac = mac_line.split^(','^)[0].strip^('"'^).replace^('-', ':'^)
 echo             logger.info^(f"Detected MAC address: {mac}"^)
 echo             return mac
 echo     except Exception as e:
@@ -99,7 +99,7 @@ echo
 echo         except requests.exceptions.RequestException as e:
 echo             logger.warning^(f"Failed to reach webhook: {e}"^)
 echo             
-echo         if attempt ^< MAX_RETRIES - 1:
+echo         if attempt + 1 != MAX_RETRIES:
 echo             logger.info^(f"Waiting {RETRY_DELAY} seconds before retry..."^)
 echo             time.sleep^(RETRY_DELAY^)
 echo     
