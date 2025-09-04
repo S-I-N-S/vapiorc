@@ -21,6 +21,7 @@ class Settings:
     
     # Container paths (internal to vapiorc app container)
     CONTAINER_DATA_DIR: str = os.getenv("VAPIORC_CONTAINER_DATA_DIR", "/app/data")
+    CONTAINER_ASSETS_DIR: str = "/app/assets"  # Mounted via docker-compose
     GOLDEN_IMAGES_PATH: str = f"{CONTAINER_DATA_DIR}/golden_images"
     INSTANCES_PATH: str = f"{CONTAINER_DATA_DIR}/instances"
     
@@ -52,23 +53,13 @@ class Settings:
         import logging
         logger = logging.getLogger(__name__)
         
-        # Try multiple possible paths for install.bat
-        possible_paths = [
-            Path("/src/assets") / "install.bat",  # Container internal path (most likely)
-            Path(__file__).resolve().parent.parent / "assets" / "install.bat",  # Relative to this file
-            Path(cls.HOST_ASSETS_PATH) / "install.bat"  # Host path (less likely to work from container)
-        ]
+        # Simple path - assets are mounted to /app/assets via docker-compose
+        install_bat_path = Path(cls.CONTAINER_ASSETS_DIR) / "install.bat"
         
-        install_bat_path = None
-        for path in possible_paths:
-            logger.info(f"Checking for install.bat at: {path}")
-            if path.exists():
-                install_bat_path = path
-                logger.info(f"Found install.bat at: {path}")
-                break
-        
-        if not install_bat_path:
-            logger.error(f"Could not find install.bat in any of these locations: {[str(p) for p in possible_paths]}")
+        logger.info(f"Checking for install.bat at: {install_bat_path}")
+        if not install_bat_path.exists():
+            logger.error(f"Could not find install.bat at {install_bat_path}")
+            logger.error("Make sure assets folder is properly mounted in docker-compose.yml")
             return
         
         # Read the current content
